@@ -1,43 +1,24 @@
-sudo: false
-
+dist: xenial
+sudo: required
 language: c
 
-os:
- - linux
-
-compiler:
- - clang
- - gcc
- - g++
-
-install:
- - ./autogen.sh
- - env CC=tcc CFLAGS='-w' CPPFLAGS="-DDEV_MODE=1" ./configure --prefix=/tmp --disable-dependency-tracking --disable-shared || cat config.log
- - make -j $(nproc) && make check && make install
- - env CC=tcc CPPFLAGS='-I/tmp/include' LDFLAGS='-L/tmp/lib' LD_LIBRARY_PATH='/tmp/lib' ./test/constcheck.sh
- - make uninstall
- - make distclean
+before_script:
+  - echo -n | openssl s_client -connect scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-certificates.crt
 
 script:
- - env CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking
- - if [ "$TRAVIS_OS_NAME" = 'linux' -a "$CC" = 'gcc' ]; then make -j $(nproc) CFLAGS='-g0' > /dev/null && cp src/libsodium/.libs/libsodium.so lib.so && make clean > /dev/null && make CFLAGS='-g0' CPPFLAGS='-DSODIUM_C99\(X\)=' > /dev/null && cp src/libsodium/.libs/libsodium.so lib-oldc.so && cmp lib.so lib-oldc.so && echo No binary changes && make clean > /dev/null ; fi
- - make distcheck
- - make distclean > /dev/null
- - CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking --enable-minimal
- - make -j $(nproc)
- - make check
- - ( echo '#include <sodium.h>' ; echo 'int main(void) { return sodium_init(); }' ) > /tmp/main.c && gcc -Isrc/libsodium/include -Isrc/libsodium/include/sodium $(find src -name '*.c' -o -name '*.S') /tmp/main.c
- - make distclean > /dev/null
+  - curl -s 'https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh' | bash
 
-after_success:
- - CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking --host=powerpc-linux-gnu
- - make -j $(nproc)
- - env QEMU_LD_PREFIX=/usr/powerpc-linux-gnu make check
- - make clean > /dev/null
+env:
+  global:
+    secure: bZyuJkHSrDkuoSeYCJiMM/egf7RtWLRxXGSQ5+1gIZiNhc8vWjfB1Xd4ap4QEOiI2xvkuiY2iiPhuV17K4cPa7otBbWisZHVqfmyAQTnzrpxmKtAt5EbyrkSReLfD5+MARmLh43RKV7CNFrbkRXxOuR8KkyYGXlP1LkUpyf1n0U=
+    - COVERITY_SCAN_BRANCH_PATTERN="coverity_scan"
+    - COVERITY_SCAN_NOTIFICATION_EMAIL="coverityscan@pureftpd.org"
+    - COVERITY_SCAN_COMMAND_PREPEND="./autogen.sh ; ./configure"
+    - COVERITY_SCAN_BUILD_COMMAND="make -j4"
+    - COVERITY_SCAN_PROJECT_NAME="$TRAVIS_REPO_SLUG"
+    - COVERITY_SCAN_PROJECT_VERSION="dev"
+    - COVERITY_SCAN_PROJECT_DESCRIPTION="libsodium"
 
-addons:
-  apt:
-    packages:
-      - tcc
-      - qemu-user-static
-      - gcc-powerpc-linux-gnu
+apt:
+  packages:
+    - ca-certificates
